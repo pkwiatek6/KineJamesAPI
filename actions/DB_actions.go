@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rs/zerolog/log"
 
@@ -17,22 +18,24 @@ type MongoClient struct {
 	Collection string
 }
 
-func (c MongoClient) ConnectDB() error {
-	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+func (c MongoClient) ConnectDB(URI string) (*mongo.Client, error) {
+	if URI == "" {
+		return nil, errors.New("URI env variable not set")
+	}
+	clientOptions := options.Client().ApplyURI(URI)
 
-	var err error
-	c.Client, err = mongo.Connect(context.TODO(), clientOptions)
+	returnClient, err := mongo.Connect(context.TODO(), clientOptions)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = c.Client.Ping(context.TODO(), nil)
+	err = returnClient.Ping(context.TODO(), nil)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return returnClient, nil
 }
 
 //Returns a document from connected db looking in c.Collection from c.Database
@@ -41,6 +44,8 @@ func (c MongoClient) ConnectDB() error {
 // returns mongo.ErrNoDocuments if nothing is found, if multiple are found it returns one
 func (c MongoClient) GetCharacterByName(name string, user string) (*structs.Character, error) {
 	filter := bson.M{"name": name, "user": user}
+	log.Debug().Msgf("filter: %v", filter)
+	log.Debug().Msgf("c values: %v", c)
 	collection := c.Client.Database(c.Database).Collection(c.Collection)
 	var character structs.Character
 	err := collection.FindOne(context.TODO(), filter).Decode(&character)
@@ -56,6 +61,7 @@ func (c MongoClient) GetAllCharactersFromPlayer(user string) (map[string]*struct
 	var results []structs.Character
 	var toReturn = make(map[string]*structs.Character)
 	filter := bson.M{"user": user}
+	log.Debug().Msgf("c values: %v", c)
 	cursor, err := c.Client.Database(c.Database).Collection(c.Collection).Find(context.TODO(), filter)
 	if err != nil {
 		return nil, err
@@ -76,6 +82,7 @@ func (c MongoClient) GetAllCharactersFromPlayer(user string) (map[string]*struct
 func (c MongoClient) GetAllCharacterNamesFromPlayer(user string) ([]string, error) {
 	var results []structs.Character
 	filter := bson.M{"user": user}
+	log.Debug().Msgf("c values: %v", c)
 	cursor, err := c.Client.Database(c.Database).Collection(c.Collection).Find(context.TODO(), filter)
 	if err != nil {
 		return nil, err
@@ -84,8 +91,10 @@ func (c MongoClient) GetAllCharacterNamesFromPlayer(user string) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-	var toReturn = make([]string, 0, cap(results))
+	log.Debug().Msgf("results values: %v", results)
+	var toReturn = make([]string, len(results), cap(results))
 	for key, character := range results {
+		log.Debug().Msgf("Key %v, Value %v", key, character.Name)
 		toReturn[key] = character.Name
 	}
 	return toReturn, nil

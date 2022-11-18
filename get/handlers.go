@@ -2,6 +2,7 @@ package get
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkwiatek6/KineJamesAPI/actions"
@@ -12,10 +13,12 @@ func GetCharacterByName(ginCtx *gin.Context) {
 	userid := ginCtx.Param("userid")
 	name := ginCtx.Param("name")
 	client := ginCtx.MustGet("dbClient").(*actions.MongoClient)
+	name = strings.ReplaceAll(name, "+", " ")
 	character, err := client.GetCharacterByName(name, userid)
+	log.Debug().Msgf("Requesting {%v} from {%v}", name, userid)
 	if err != nil {
 		log.Err(err).Msgf("Could not find Character %v, from user %v", name, userid)
-		ginCtx.JSON(http.StatusBadRequest, gin.H{"error": "Could find Character"})
+		ginCtx.JSON(http.StatusBadRequest, gin.H{"error": "Could not find Character"})
 		return
 	}
 	ginCtx.JSON(http.StatusOK, character)

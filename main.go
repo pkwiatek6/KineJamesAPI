@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
@@ -15,12 +16,17 @@ import (
 func main() {
 	initLogging()
 	mongoClient := new(actions.MongoClient)
-	err := mongoClient.ConnectDB()
+	mongoClient.Database = os.Getenv("Database")
+	mongoClient.Collection = os.Getenv("Collection")
+
+	var err error
+	mongoClient.Client, err = mongoClient.ConnectDB(os.Getenv("URI"))
 	if err != nil {
 		log.Panic().Msgf("Could not connect to db. Error: %v, Client: %v", err, mongoClient)
 	} else {
 		log.Info().Msg("Connected to DB")
 	}
+	log.Debug().Msgf("mongoClient: %v", mongoClient)
 	//There might be some bad security here because I couldn't figure out how to pass the secret from the website to the api so the api is unprotected
 	router := gin.Default()
 	initRoutes(router, mongoClient)
@@ -41,7 +47,7 @@ func initLogging() {
 
 func initRoutes(router *gin.Engine, client *actions.MongoClient) {
 	router.Use(dbMidware(client))
-
+	log.Debug().Msgf("Usings dbMidware with %v", client)
 	saveHandlers := router.Group("/save")
 	{
 		saveHandlers.POST("/character", post.SaveCharacter)
