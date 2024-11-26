@@ -30,7 +30,7 @@ func GetAllCharacters(ginCtx *gin.Context) {
 	characters, err := client.GetAllCharactersFromPlayer(userid)
 	if err != nil {
 		log.Err(err).Msgf("Could not find Characters from user %v", userid)
-		ginCtx.JSON(http.StatusBadRequest, gin.H{"error": "Could find Characters from user"})
+		ginCtx.JSON(http.StatusBadRequest, gin.H{"error": "Could not find Characters from user"})
 		return
 	}
 	ginCtx.JSON(http.StatusOK, characters)

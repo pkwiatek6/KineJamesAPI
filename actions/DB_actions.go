@@ -14,39 +14,50 @@ import (
 
 type MongoClient struct {
 	Client     *mongo.Client
-	Database   string
+	Database   *mongo.Database //string
 	Collection string
 }
 
-func (c MongoClient) ConnectDB(URI string) (*mongo.Client, error) {
+func (mc *MongoClient) ConnectDB(URI, dbName, colName string) error {
 	if URI == "" {
-		return nil, errors.New("URI env variable not set")
+		return errors.New("MongoDB URI is required")
 	}
+	if dbName == "" {
+		return errors.New("database name is required")
+	}
+	if colName == "" {
+		return errors.New("collection name is required")
+	}
+
 	clientOptions := options.Client().ApplyURI(URI)
-
-	returnClient, err := mongo.Connect(context.TODO(), clientOptions)
-
+	client, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	err = returnClient.Ping(context.TODO(), nil)
-
+	// Verify connection
+	err = client.Ping(context.TODO(), nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return returnClient, nil
+
+	// Assign client and database to the MongoClient struct
+	mc.Client = client
+	mc.Database = client.Database(dbName)
+	mc.Collection = colName
+
+	return nil
 }
 
-//Returns a document from connected db looking in c.Collection from c.Database
-//name string is the name of the character you are looking for
+// Returns a document from connected db looking in c.Collection from c.Database
+// name string is the name of the character you are looking for
 // user string is the user that is looking for the character
 // returns mongo.ErrNoDocuments if nothing is found, if multiple are found it returns one
-func (c MongoClient) GetCharacterByName(name string, user string) (*structs.Character, error) {
+func (c *MongoClient) GetCharacterByName(name string, user string) (*structs.Character, error) {
 	filter := bson.M{"name": name, "user": user}
 	log.Debug().Msgf("filter: %v", filter)
 	log.Debug().Msgf("c values: %v", c)
-	collection := c.Client.Database(c.Database).Collection(c.Collection)
+	collection := c.Database.Collection(c.Collection)
 	var character structs.Character
 	err := collection.FindOne(context.TODO(), filter).Decode(&character)
 	if err != nil {
@@ -56,13 +67,13 @@ func (c MongoClient) GetCharacterByName(name string, user string) (*structs.Char
 	}
 }
 
-//Gets all Characters that are from the give user
-func (c MongoClient) GetAllCharactersFromPlayer(user string) (map[string]*structs.Character, error) {
+// Gets all Characters that are from the give user
+func (c *MongoClient) GetAllCharactersFromPlayer(user string) (map[string]*structs.Character, error) {
 	var results []structs.Character
 	var toReturn = make(map[string]*structs.Character)
 	filter := bson.M{"user": user}
 	log.Debug().Msgf("c values: %v", c)
-	cursor, err := c.Client.Database(c.Database).Collection(c.Collection).Find(context.TODO(), filter)
+	cursor, err := c.Database.Collection(c.Collection).Find(context.TODO(), filter)
 	if err != nil {
 		return nil, err
 	}
@@ -76,14 +87,14 @@ func (c MongoClient) GetAllCharactersFromPlayer(user string) (map[string]*struct
 	return toReturn, nil
 }
 
-//Gets all Characters names that are from the give user.
-//Used if you only want names, uses less memory than GetAllCharacters
-//Returns an array of strings containing all names
-func (c MongoClient) GetAllCharacterNamesFromPlayer(user string) ([]string, error) {
+// Gets all Characters names that are from the give user.
+// Used if you only want names, uses less memory than GetAllCharacters
+// Returns an array of strings containing all names
+func (c *MongoClient) GetAllCharacterNamesFromPlayer(user string) ([]string, error) {
 	var results []structs.Character
 	filter := bson.M{"user": user}
 	log.Debug().Msgf("c values: %v", c)
-	cursor, err := c.Client.Database(c.Database).Collection(c.Collection).Find(context.TODO(), filter)
+	cursor, err := c.Database.Collection(c.Collection).Find(context.TODO(), filter)
 	if err != nil {
 		return nil, err
 	}
@@ -100,9 +111,9 @@ func (c MongoClient) GetAllCharacterNamesFromPlayer(user string) ([]string, erro
 	return toReturn, nil
 }
 
-//Saves the given Character struct to the db, if there wasn't a character sheet it makes one
-func (c MongoClient) SaveCharacterToUser(character structs.Character) error {
-	collection := c.Client.Database(c.Database).Collection(c.Collection)
+// Saves the given Character struct to the db, if there wasn't a character sheet it makes one
+func (c *MongoClient) SaveCharacterToUser(character structs.Character) error {
+	collection := c.Database.Collection(c.Collection)
 	filter := bson.M{"name": character.Name, "user": character.User}
 	update := bson.M{"$set": character}
 	updateResult, err := collection.UpdateOne(context.TODO(), filter, update)
